@@ -19,6 +19,8 @@ type Context struct {
 	MatchedRoute string
 
 	cacheQueryValues url.Values
+
+	tplEngine TemplateEngine
 }
 
 type StringValue struct {
@@ -64,6 +66,16 @@ func (c *Context) PathValue(key string) StringValue {
 
 func (c *Context) SetCookie(cookie *http.Cookie) {
 	http.SetCookie(c.Resp, cookie)
+}
+
+func (c *Context) Render(tplName string, data any) error {
+	var err error
+	c.RespData, err = c.tplEngine.Render(c.Req.Context(), tplName, data)
+	c.RespStatusCode = http.StatusOK
+	if err != nil {
+		c.RespStatusCode = http.StatusInternalServerError
+	}
+	return err
 }
 
 func (c *Context) RespJSON(code int, val any) error {

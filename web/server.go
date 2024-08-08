@@ -17,12 +17,25 @@ var _ Server = &HTTPServer{}
 
 type HTTPServer struct {
 	router
-	mdls []Middleware
+	mdls      []Middleware
+	tplEngine TemplateEngine
 }
 
-func NewHTTPServer() *HTTPServer {
-	return &HTTPServer{
+type HTTPServerOption func(server *HTTPServer)
+
+func NewHTTPServer(opts ...HTTPServerOption) *HTTPServer {
+	s := &HTTPServer{
 		router: newRouter(),
+	}
+	for _, opt := range opts {
+		opt(s)
+	}
+	return s
+}
+
+func ServerWithTemplateEngine(engine TemplateEngine) HTTPServerOption {
+	return func(server *HTTPServer) {
+		server.tplEngine = engine
 	}
 }
 
@@ -40,8 +53,9 @@ func (s *HTTPServer) UseV1(method string, path string, mdls ...Middleware) {
 
 func (s *HTTPServer) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
 	ctx := &Context{
-		Req:  request,
-		Resp: writer,
+		Req:       request,
+		Resp:      writer,
+		tplEngine: s.tplEngine,
 	}
 	// the last one should be HTTPServer to execute route matching and user code
 	root := s.serve

@@ -3,6 +3,7 @@ module WebFrame
 go 1.22
 
 require (
+	github.com/hashicorp/golang-lru v1.0.2
 	github.com/prometheus/client_golang v1.19.1
 	github.com/stretchr/testify v1.9.0
 	go.opentelemetry.io/otel v1.28.0

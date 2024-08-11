@@ -21,6 +21,10 @@ type Context struct {
 	cacheQueryValues url.Values
 
 	tplEngine TemplateEngine
+
+	// User can decide what to store here,
+	// mainly used to solve the problem of data transfer between different Middleware
+	UserValues map[string]any
 }
 
 type StringValue struct {

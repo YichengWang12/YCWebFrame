@@ -1,7 +1,7 @@
 package orm
 
 import (
-	"fmt"
+	"WebFrame/orm/internal/errs"
 	"reflect"
 	"strings"
 )
@@ -11,6 +11,7 @@ type Selector[T any] struct {
 	args  []any
 	where []Predicate
 	table string
+	model *model
 }
 
 func (s *Selector[T]) From(tbl string) *Selector[T] {
@@ -19,6 +20,14 @@ func (s *Selector[T]) From(tbl string) *Selector[T] {
 }
 
 func (s *Selector[T]) Build() (*Query, error) {
+	var (
+		t   T
+		err error
+	)
+	s.model, err = parseModel(&t)
+	if err != nil {
+		return nil, err
+	}
 	s.sb.WriteString("SELECT * FROM ")
 	if s.table == "" {
 		var t T
@@ -53,8 +62,12 @@ func (s *Selector[T]) buildExpression(e Expression) error {
 	}
 	switch exp := e.(type) {
 	case Column:
+		fd, ok := s.model.fieldMap[exp.name]
+		if !ok {
+			return errs.NewErrUnknownField(exp.name)
+		}
 		s.sb.WriteByte('`')
-		s.sb.WriteString(exp.name)
+		s.sb.WriteString(fd.colName)
 		s.sb.WriteByte('`')
 	case value:
 		s.sb.WriteByte('?')
@@ -84,7 +97,7 @@ func (s *Selector[T]) buildExpression(e Expression) error {
 			s.sb.WriteByte(')')
 		}
 	default:
-		return fmt.Errorf("orm : unsupported expression: %T", exp)
+		return errs.NewErrUnsupportedExpressionType(exp)
 	}
 	return nil
 }

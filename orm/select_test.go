@@ -50,7 +50,7 @@ func TestSelector_Build(t *testing.T) {
 			q: NewSelector[TestModel]().From("`test_model_t`").
 				Where(C("Id").EQ(1)),
 			wantQuery: &Query{
-				SQL:  "SELECT * FROM `test_model_t` WHERE `Id` = ?;",
+				SQL:  "SELECT * FROM `test_model_t` WHERE `id` = ?;",
 				Args: []any{1},
 			},
 		},
@@ -60,7 +60,7 @@ func TestSelector_Build(t *testing.T) {
 			q: NewSelector[TestModel]().
 				Where(C("Age").GT(18), C("Age").LT(35)),
 			wantQuery: &Query{
-				SQL:  "SELECT * FROM `TestModel` WHERE (`Age` > ?) AND (`Age` < ?);",
+				SQL:  "SELECT * FROM `TestModel` WHERE (`age` > ?) AND (`age` < ?);",
 				Args: []any{18, 35},
 			},
 		},
@@ -70,7 +70,7 @@ func TestSelector_Build(t *testing.T) {
 			q: NewSelector[TestModel]().
 				Where(C("Age").GT(18).And(C("Age").LT(35))),
 			wantQuery: &Query{
-				SQL:  "SELECT * FROM `TestModel` WHERE (`Age` > ?) AND (`Age` < ?);",
+				SQL:  "SELECT * FROM `TestModel` WHERE (`age` > ?) AND (`age` < ?);",
 				Args: []any{18, 35},
 			},
 		},
@@ -80,7 +80,7 @@ func TestSelector_Build(t *testing.T) {
 			q: NewSelector[TestModel]().
 				Where(C("Age").GT(18).Or(C("Age").LT(35))),
 			wantQuery: &Query{
-				SQL:  "SELECT * FROM `TestModel` WHERE (`Age` > ?) OR (`Age` < ?);",
+				SQL:  "SELECT * FROM `TestModel` WHERE (`age` > ?) OR (`age` < ?);",
 				Args: []any{18, 35},
 			},
 		},
@@ -90,7 +90,7 @@ func TestSelector_Build(t *testing.T) {
 			q:    NewSelector[TestModel]().Where(Not(C("Age").GT(18))),
 			wantQuery: &Query{
 				// NOT 前面有两个空格，因为我们没有对 NOT 进行特殊处理
-				SQL:  "SELECT * FROM `TestModel` WHERE  NOT (`Age` > ?);",
+				SQL:  "SELECT * FROM `TestModel` WHERE  NOT (`age` > ?);",
 				Args: []any{18},
 			},
 		},

@@ -11,7 +11,9 @@ type Deleter[T any] struct {
 	table string
 	where []Predicate
 	args  []any
-	model *model
+	model *Model
+
+	db *DB
 }
 
 func (d *Deleter[T]) From(tbl string) *Deleter[T] {
@@ -24,7 +26,7 @@ func (d *Deleter[T]) Build() (*Query, error) {
 		t   T
 		err error
 	)
-	d.model, err = parseModel(&t)
+	d.model, err = d.db.r.Get(&t)
 	if err != nil {
 		return nil, err
 	}
@@ -107,6 +109,8 @@ func (d *Deleter[T]) Where(preds ...Predicate) *Deleter[T] {
 	return d
 }
 
-func NewDeleter[T any]() *Deleter[T] {
-	return &Deleter[T]{}
+func NewDeleter[T any](db *DB) *Deleter[T] {
+	return &Deleter[T]{
+		db: db,
+	}
 }

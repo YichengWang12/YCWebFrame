@@ -23,3 +23,7 @@ func NewErrUnknownField(fd string) error {
 func NewErrUnsupportedExpressionType(exp any) error {
 	return fmt.Errorf("orm: unsupported expression: %v ", exp)
 }
+
+func NewErrInvalidTagContent(tag string) error {
+	return fmt.Errorf("orm: invalid tag content %s", tag)
+}

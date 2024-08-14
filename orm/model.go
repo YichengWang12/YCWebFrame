@@ -2,11 +2,12 @@ package orm
 
 import (
 	"WebFrame/orm/internal/errs"
-	"reflect"
 	"unicode"
 )
 
-type model struct {
+type ModelOpt func(model *Model) error
+
+type Model struct {
 	tableName string
 	fieldMap  map[string]*field
 }
@@ -15,26 +16,22 @@ type field struct {
 	colName string
 }
 
-func parseModel(val any) (*model, error) {
-	typ := reflect.TypeOf(val)
-	if typ.Kind() != reflect.Ptr || typ.Elem().Kind() != reflect.Struct {
-		return nil, errs.ErrPointerOnly
+func ModelWithTableName(tableName string) ModelOpt {
+	return func(model *Model) error {
+		model.tableName = tableName
+		return nil
 	}
-	typ = typ.Elem()
-	// get the number of fields
-	numField := typ.NumField()
-	fds := make(map[string]*field, numField)
-	for i := 0; i < numField; i++ {
-		fdType := typ.Field(i)
-		fds[fdType.Name] = &field{
-			colName: underscoreName(fdType.Name),
-		}
-	}
+}
 
-	return &model{
-		tableName: underscoreName(typ.Name()),
-		fieldMap:  fds,
-	}, nil
+func ModelWithColumnName(field string, columnName string) ModelOpt {
+	return func(model *Model) error {
+		fd, ok := model.fieldMap[field]
+		if !ok {
+			return errs.NewErrUnknownField(field)
+		}
+		fd.colName = columnName
+		return nil
+	}
 }
 
 // undersocreName converts camel case to snake case
@@ -51,4 +48,15 @@ func underscoreName(tableName string) string {
 		}
 	}
 	return string(buf)
+}
+
+// We put all the keys of the tags we support here
+// to make it easier for users to find and for us to maintain
+const (
+	tagKeyColumn = "column"
+)
+
+// TableName is an interface that users can implement to return a custom table name
+type TableName interface {
+	TableName() string
 }

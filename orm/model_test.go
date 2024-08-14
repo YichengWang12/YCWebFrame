@@ -1,79 +1,81 @@
 package orm
 
 import (
-	"errors"
 	"github.com/stretchr/testify/assert"
 	"testing"
 )
 
-func Test_parseModel(t *testing.T) {
+func TestModelWithTableName(t *testing.T) {
 	testCases := []struct {
-		name      string
-		val       any
-		wantModel *model
-		wantErr   error
+		name          string
+		val           any
+		opt           ModelOpt
+		wantTableName string
+		wantErr       error
 	}{
 		{
-			name:    "test model",
-			val:     TestModel{},
-			wantErr: errors.New("orm: Only supports one-level pointer as input, such as *User"),
+			// We do not check empty strings
+			name:          "empty string",
+			val:           &TestModel{},
+			opt:           ModelWithTableName(""),
+			wantTableName: "",
 		},
 		{
-			// Pointer
-			name: "pointer",
-			val:  &TestModel{},
-			wantModel: &model{
-				tableName: "test_model",
-				fieldMap: map[string]*field{
-					"Id": {
-						colName: "id",
-					},
-					"FirstName": {
-						colName: "first_name",
-					},
-					"Age": {
-						colName: "age",
-					},
-					"LastName": {
-						colName: "last_name",
-					},
-				},
-			},
-		},
-		{
-			// Multiple pointers
-			name: "multiple pointer",
-			val: func() any {
-				val := &TestModel{}
-				return &val
-			}(),
-			wantErr: errors.New("orm: Only supports one-level pointer as input, such as *User"),
-		},
-		{
-			name:    "map",
-			val:     map[string]string{},
-			wantErr: errors.New("orm: Only supports one-level pointer as input, such as *User"),
-		},
-		{
-			name:    "slice",
-			val:     []int{},
-			wantErr: errors.New("orm: Only supports one-level pointer as input, such as *User"),
-		},
-		{
-			name:    "basic type",
-			val:     0,
-			wantErr: errors.New("orm: Only supports one-level pointer as input, such as *User"),
+			name:          "table name",
+			val:           &TestModel{},
+			opt:           ModelWithTableName("test_model_t"),
+			wantTableName: "test_model_t",
 		},
 	}
 
+	r := NewRegistry()
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			m, err := parseModel(tc.val)
+			m, err := r.Register(tc.val, tc.opt)
 			assert.Equal(t, tc.wantErr, err)
 			if err != nil {
 				return
 			}
-			assert.Equal(t, tc.wantModel, m)
+			assert.Equal(t, tc.wantTableName, m.tableName)
+		})
+	}
+
+}
+
+func TestModelWithColumnName(t *testing.T) {
+	testCases := []struct {
+		name        string
+		val         any
+		opt         ModelOpt
+		field       string
+		wantColName string
+		wantErr     error
+	}{
+		{
+			name:        "new name",
+			val:         &TestModel{},
+			opt:         ModelWithColumnName("FirstName", "first_name_new"),
+			field:       "FirstName",
+			wantColName: "first_name_new",
+		},
+		{
+			name:        "empty new name",
+			val:         &TestModel{},
+			opt:         ModelWithColumnName("FirstName", ""),
+			field:       "FirstName",
+			wantColName: "",
+		},
+	}
+
+	r := NewRegistry()
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			m, err := r.Register(tc.val, tc.opt)
+			assert.Equal(t, tc.wantErr, err)
+			if err != nil {
+				return
+			}
+			assert.Equal(t, tc.wantColName, m.fieldMap[tc.field].colName)
 		})
 	}
 }

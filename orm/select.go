@@ -2,6 +2,8 @@ package orm
 
 import (
 	"WebFrame/orm/internal/errs"
+	model2 "WebFrame/orm/model"
+	"context"
 	"reflect"
 	"strings"
 )
@@ -11,7 +13,7 @@ type Selector[T any] struct {
 	args  []any
 	where []Predicate
 	table string
-	model *Model
+	model *model2.Model
 
 	db *DB
 }
@@ -64,12 +66,12 @@ func (s *Selector[T]) buildExpression(e Expression) error {
 	}
 	switch exp := e.(type) {
 	case Column:
-		fd, ok := s.model.fieldMap[exp.name]
+		fd, ok := s.model.FieldMap[exp.name]
 		if !ok {
 			return errs.NewErrUnknownField(exp.name)
 		}
 		s.sb.WriteByte('`')
-		s.sb.WriteString(fd.colName)
+		s.sb.WriteString(fd.ColName)
 		s.sb.WriteByte('`')
 	case value:
 		s.sb.WriteByte('?')
@@ -107,6 +109,59 @@ func (s *Selector[T]) buildExpression(e Expression) error {
 func (s *Selector[T]) Where(ps ...Predicate) *Selector[T] {
 	s.where = ps
 	return s
+}
+
+func (s *Selector[T]) Get(ctx context.Context) (*T, error) {
+	q, err := s.Build()
+	if err != nil {
+		return nil, err
+	}
+	//s.db is our defined DB
+	//s.db.db is the *sql.DB
+	rows, err := s.db.db.QueryContext(ctx, q.SQL, q.Args...)
+	if err != nil {
+		return nil, err
+	}
+	if !rows.Next() {
+		return nil, errs.ErrNoRows
+	}
+	// construct
+	tp := new(T)
+	meta, err := s.db.r.Get(tp)
+	if err != nil {
+		return nil, err
+	}
+	val := s.db.valCreator(tp, meta)
+	err = val.SetColumns(rows)
+	return tp, err
+}
+
+func (s *Selector[T]) GetMulti(ctx context.Context) ([]*T, error) {
+	q, err := s.Build()
+	if err != nil {
+		return nil, err
+	}
+	rows, err := s.db.db.QueryContext(ctx, q.SQL, q.Args...)
+	if err != nil {
+		return nil, err
+	}
+	tps := make([]*T, 2)
+	count := 0
+	for rows.Next() {
+		// construct
+		tp := new(T)
+		meta, er := s.db.r.Get(tp)
+		if er != nil {
+			return nil, er
+		}
+		val := s.db.valCreator(tp, meta)
+		er = val.SetColumns(rows)
+		if er != nil && count <= cap(tps) {
+			tps[count] = tp
+			count++
+		}
+	}
+	return tps, nil
 }
 
 func NewSelector[T any](db *DB) *Selector[T] {

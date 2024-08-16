@@ -1,15 +1,18 @@
-package orm
+package model
 
 import (
 	"WebFrame/orm/internal/errs"
 	"reflect"
 	"strings"
 	"sync"
+	"unicode"
 )
+
+type Option func(m *Model) error
 
 type Registry interface {
 	Get(val any) (*Model, error)
-	Register(val any, opts ...ModelOpt) (*Model, error)
+	Register(val any, opts ...Option) (*Model, error)
 }
 
 type registry struct {
@@ -29,7 +32,7 @@ func (r *registry) Get(val any) (*Model, error) {
 	return r.Register(val)
 }
 
-func (r *registry) Register(val any, opts ...ModelOpt) (*Model, error) {
+func (r *registry) Register(val any, opts ...Option) (*Model, error) {
 	m, err := r.parseModel(val)
 	if err != nil {
 		return nil, err
@@ -55,7 +58,7 @@ func (r *registry) parseModel(val any) (*Model, error) {
 	typ = typ.Elem()
 	// get the number of fields
 	numField := typ.NumField()
-	fds := make(map[string]*field, numField)
+	fds := make(map[string]*Field, numField)
 	for i := 0; i < numField; i++ {
 		fdType := typ.Field(i)
 		tags, err := r.parseTag(fdType.Tag)
@@ -66,8 +69,8 @@ func (r *registry) parseModel(val any) (*Model, error) {
 		if colName == "" {
 			colName = underscoreName(fdType.Name)
 		}
-		fds[fdType.Name] = &field{
-			colName: colName,
+		fds[fdType.Name] = &Field{
+			ColName: colName,
 		}
 	}
 	var tableName string
@@ -78,8 +81,8 @@ func (r *registry) parseModel(val any) (*Model, error) {
 		tableName = underscoreName(typ.Name())
 	}
 	return &Model{
-		tableName: underscoreName(typ.Name()),
-		fieldMap:  fds,
+		TableName: underscoreName(typ.Name()),
+		FieldMap:  fds,
 	}, nil
 }
 
@@ -99,4 +102,38 @@ func (r *registry) parseTag(tag reflect.StructTag) (map[string]string, error) {
 		res[kv[0]] = kv[1]
 	}
 	return res, nil
+}
+
+func WithTableName(tableName string) Option {
+	return func(model *Model) error {
+		model.TableName = tableName
+		return nil
+	}
+}
+
+func WithColumnName(field string, columnName string) Option {
+	return func(model *Model) error {
+		fd, ok := model.FieldMap[field]
+		if !ok {
+			return errs.NewErrUnknownField(field)
+		}
+		fd.ColName = columnName
+		return nil
+	}
+}
+
+// undersocreName converts camel case to snake case
+func underscoreName(tableName string) string {
+	var buf []byte
+	for i, v := range tableName {
+		if unicode.IsUpper(v) {
+			if i != 0 {
+				buf = append(buf, '_')
+			}
+			buf = append(buf, byte(unicode.ToLower(v)))
+		} else {
+			buf = append(buf, byte(v))
+		}
+	}
+	return string(buf)
 }

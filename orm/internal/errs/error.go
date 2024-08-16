@@ -11,6 +11,9 @@ var (
 	// We don't want users to be able to use err == ErrPointerOnly directly
 	// So put it in our internal package
 	ErrPointerOnly = errors.New("orm: Only supports one-level pointer as input, such as *User")
+	// ErrNoRows represents no data found
+	ErrNoRows                 = errors.New("orm: no data found")
+	ErrTooManyReturnedColumns = errors.New("orm: too many columns")
 )
 
 // NewErrUnknownField returns an error representing an unknown field
@@ -26,4 +29,8 @@ func NewErrUnsupportedExpressionType(exp any) error {
 
 func NewErrInvalidTagContent(tag string) error {
 	return fmt.Errorf("orm: invalid tag content %s", tag)
+}
+
+func NewErrUnknownColumn(col string) error {
+	return fmt.Errorf("orm: unknown column: %s", col)
 }

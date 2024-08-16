@@ -2,6 +2,7 @@ package orm
 
 import (
 	"WebFrame/orm/internal/errs"
+	model2 "WebFrame/orm/model"
 	"reflect"
 	"strings"
 )
@@ -11,7 +12,7 @@ type Deleter[T any] struct {
 	table string
 	where []Predicate
 	args  []any
-	model *Model
+	model *model2.Model
 
 	db *DB
 }
@@ -45,8 +46,8 @@ func (d *Deleter[T]) Build() (*Query, error) {
 		for i := 1; i < len(d.where); i++ {
 			p = p.And(d.where[i])
 		}
-		if err := d.buildExpression(p); err != nil {
-			return nil, err
+		if er := d.buildExpression(p); er != nil {
+			return nil, er
 		}
 
 	}
@@ -63,12 +64,12 @@ func (d *Deleter[T]) buildExpression(e Expression) error {
 	}
 	switch exp := e.(type) {
 	case Column:
-		fd, ok := d.model.fieldMap[exp.name]
+		fd, ok := d.model.FieldMap[exp.name]
 		if !ok {
 			return errs.NewErrUnknownField(exp.name)
 		}
 		d.sb.WriteByte('`')
-		d.sb.WriteString(fd.colName)
+		d.sb.WriteString(fd.ColName)
 		d.sb.WriteByte('`')
 	case value:
 		d.sb.WriteByte('?')

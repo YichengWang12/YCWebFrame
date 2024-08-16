@@ -1,16 +1,21 @@
 package orm
 
 import (
+	_ "github.com/mattn/go-sqlite3"
 	"github.com/stretchr/testify/assert"
 	"testing"
 )
 
-func TestSelector_Build(t *testing.T) {
-	db, err := NewDB()
+func memoryDB(t *testing.T) *DB {
+	orm, err := Open("sqlite3", "file:test.db?cache=shared&mode=memory")
 	if err != nil {
 		t.Fatal(err)
-
 	}
+	return orm
+}
+
+func TestSelector_Build(t *testing.T) {
+	db := memoryDB(t)
 	testCases := []struct {
 		name      string
 		q         QueryBuilder

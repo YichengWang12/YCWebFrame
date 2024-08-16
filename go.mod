@@ -4,7 +4,9 @@ go 1.22
 
 require (
 	github.com/google/uuid v1.6.0
+	github.com/gotomicro/ekit v0.0.6
 	github.com/hashicorp/golang-lru v1.0.2
+	github.com/mattn/go-sqlite3 v1.14.15
 	github.com/patrickmn/go-cache v2.1.0+incompatible
 	github.com/prometheus/client_golang v1.19.1
 	github.com/stretchr/testify v1.9.0

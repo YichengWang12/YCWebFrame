@@ -14,6 +14,7 @@ var (
 	// ErrNoRows represents no data found
 	ErrNoRows                 = errors.New("orm: no data found")
 	ErrTooManyReturnedColumns = errors.New("orm: too many columns")
+	ErrInsertZeroRow          = errors.New("orm: insert zero row")
 )
 
 // NewErrUnknownField returns an error representing an unknown field
@@ -37,4 +38,8 @@ func NewErrUnknownColumn(col string) error {
 
 func NewErrUnsupportedSelectable(s any) error {
 	return fmt.Errorf("orm: unsupported selected column: %v", s)
+}
+
+func NewErrUnsupportedAssignableType(exp any) error {
+	return fmt.Errorf("orm: unsupported assignable expression: %v", exp)
 }

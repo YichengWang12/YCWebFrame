@@ -10,14 +10,15 @@ type Model struct {
 	TableName string
 	FieldMap  map[string]*Field
 	ColumnMap map[string]*Field
+	Fields    []*Field // Fields in the order they were defined in the struct
 }
 
 type Field struct {
 	ColName string
 	GoName  string
 	Type    reflect.Type
-
-	Offset uintptr
+	Index   int
+	Offset  uintptr
 }
 
 // We put all the keys of the tags we support here

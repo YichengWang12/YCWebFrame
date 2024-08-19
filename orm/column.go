@@ -9,6 +9,8 @@ func (c Column) expr() {}
 
 func (c Column) selectable() {}
 
+func (c Column) assign() {}
+
 func (c Column) As(alias string) Column {
 	return Column{
 		name:  c.name,

@@ -4,18 +4,27 @@ import (
 	"WebFrame/orm/internal/errs"
 	model2 "WebFrame/orm/model"
 	"context"
-	"reflect"
 	"strings"
 )
 
 type Selector[T any] struct {
-	sb    strings.Builder
-	args  []any
-	where []Predicate
-	table string
-	model *model2.Model
+	sb     strings.Builder
+	args   []any
+	where  []Predicate
+	having []Predicate
+	table  string
+	model  *model2.Model
 
-	db *DB
+	db      *DB
+	columns []Selectable
+	groupBy []Column
+	offset  int
+	limit   int
+}
+
+func (s *Selector[T]) Select(cols ...Selectable) *Selector[T] {
+	s.columns = cols
+	return s
 }
 
 func (s *Selector[T]) From(tbl string) *Selector[T] {
@@ -32,11 +41,15 @@ func (s *Selector[T]) Build() (*Query, error) {
 	if err != nil {
 		return nil, err
 	}
-	s.sb.WriteString("SELECT * FROM ")
+	s.sb.WriteString("SELECT ")
+	if err = s.buildColumns(); err != nil {
+		return nil, err
+	}
+	s.sb.WriteString(" FROM ")
 	if s.table == "" {
-		var t T
+
 		s.sb.WriteByte('`')
-		s.sb.WriteString(reflect.TypeOf(t).Name())
+		s.sb.WriteString(s.model.TableName)
 		s.sb.WriteByte('`')
 	} else {
 		s.sb.WriteString(s.table)
@@ -48,9 +61,36 @@ func (s *Selector[T]) Build() (*Query, error) {
 		for i := 1; i < len(s.where); i++ {
 			p = p.And(s.where[i])
 		}
-		if err := s.buildExpression(p); err != nil {
+		if err = s.buildExpression(p); err != nil {
 			return nil, err
 		}
+	}
+	if len(s.groupBy) > 0 {
+		s.sb.WriteString(" GROUP BY ")
+		for i, c := range s.groupBy {
+			if i > 0 {
+				s.sb.WriteByte(',')
+			}
+			if err = s.buildColumn(c, false); err != nil {
+				return nil, err
+			}
+		}
+
+	}
+	if len(s.having) > 0 {
+		s.sb.WriteString(" HAVING ")
+		if err = s.buildPredicates(s.having); err != nil {
+			return nil, err
+		}
+	}
+	if s.limit > 0 {
+		s.sb.WriteString(" LIMIT ?")
+		s.addArgs(s.limit)
+
+	}
+	if s.offset > 0 {
+		s.sb.WriteString(" OFFSET ?")
+		s.addArgs(s.offset)
 	}
 	s.sb.WriteByte(';')
 	return &Query{
@@ -60,19 +100,81 @@ func (s *Selector[T]) Build() (*Query, error) {
 
 }
 
+func (s *Selector[T]) buildPredicates(ps []Predicate) error {
+	p := ps[0]
+	for i := 1; i < len(ps); i++ {
+		p = p.And(ps[i])
+	}
+	return s.buildExpression(p)
+}
+
+func (s *Selector[T]) buildColumns() error {
+	if len(s.columns) == 0 {
+		s.sb.WriteByte('*')
+		return nil
+	}
+	for i, c := range s.columns {
+		if i > 0 {
+			s.sb.WriteByte(',')
+		}
+		switch val := c.(type) {
+		case Column:
+			if err := s.buildColumn(val, true); err != nil {
+				return err
+			}
+		case Aggregate:
+			if err := s.buildAggregate(val, true); err != nil {
+				return err
+			}
+		case RawExpr:
+			s.sb.WriteString(val.raw)
+			if len(val.args) != 0 {
+				s.addArgs(val.args...)
+			}
+		default:
+			return errs.NewErrUnsupportedSelectable(c)
+		}
+	}
+	return nil
+}
+
+func (s *Selector[T]) buildAggregate(a Aggregate, useAlias bool) error {
+	s.sb.WriteString(a.fn)
+	s.sb.WriteString("(`")
+	fd, ok := s.model.FieldMap[a.arg]
+	if !ok {
+		return errs.NewErrUnknownField(a.arg)
+	}
+	s.sb.WriteString(fd.ColName)
+	s.sb.WriteString("`)")
+	if useAlias {
+		s.buildAs(a.alias)
+	}
+	return nil
+}
+
+func (s *Selector[T]) buildColumn(c Column, useAlias bool) error {
+	s.sb.WriteByte('`')
+	fd, ok := s.model.FieldMap[c.name]
+	if !ok {
+		return errs.NewErrUnknownField(c.name)
+	}
+	s.sb.WriteString(fd.ColName)
+	s.sb.WriteByte('`')
+	if useAlias {
+		s.buildAs(c.alias)
+
+	}
+	return nil
+}
+
 func (s *Selector[T]) buildExpression(e Expression) error {
 	if e == nil {
 		return nil
 	}
 	switch exp := e.(type) {
 	case Column:
-		fd, ok := s.model.FieldMap[exp.name]
-		if !ok {
-			return errs.NewErrUnknownField(exp.name)
-		}
-		s.sb.WriteByte('`')
-		s.sb.WriteString(fd.ColName)
-		s.sb.WriteByte('`')
+		return s.buildColumn(exp, true)
 	case value:
 		s.sb.WriteByte('?')
 		s.args = append(s.args, exp.val)
@@ -99,6 +201,13 @@ func (s *Selector[T]) buildExpression(e Expression) error {
 		}
 		if rp {
 			s.sb.WriteByte(')')
+		}
+	case Aggregate:
+		return s.buildAggregate(exp, false)
+	case RawExpr:
+		s.sb.WriteString(exp.raw)
+		if len(exp.args) != 0 {
+			s.addArgs(exp.args...)
 		}
 	default:
 		return errs.NewErrUnsupportedExpressionType(exp)
@@ -164,8 +273,49 @@ func (s *Selector[T]) GetMulti(ctx context.Context) ([]*T, error) {
 	return tps, nil
 }
 
+func (s *Selector[T]) addArgs(args ...any) {
+	if s.args == nil {
+		s.args = make([]any, 0, 8)
+	}
+	s.args = append(s.args, args...)
+}
+
+func (s *Selector[T]) buildAs(alias string) {
+	if alias != "" {
+		s.sb.WriteString(" AS ")
+		s.sb.WriteByte('`')
+		s.sb.WriteString(alias)
+		s.sb.WriteByte('`')
+	}
+}
+
+func (s *Selector[T]) GroupBy(cols ...Column) *Selector[T] {
+	s.groupBy = cols
+	return s
+
+}
+
+func (s *Selector[T]) Having(ps ...Predicate) *Selector[T] {
+	s.having = ps
+	return s
+}
+
+func (s *Selector[T]) Offset(offset int) *Selector[T] {
+	s.offset = offset
+	return s
+}
+
+func (s *Selector[T]) Limit(limit int) *Selector[T] {
+	s.limit = limit
+	return s
+}
+
 func NewSelector[T any](db *DB) *Selector[T] {
 	return &Selector[T]{
 		db: db,
 	}
+}
+
+type Selectable interface {
+	selectable()
 }

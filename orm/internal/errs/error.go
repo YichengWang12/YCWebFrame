@@ -34,3 +34,7 @@ func NewErrInvalidTagContent(tag string) error {
 func NewErrUnknownColumn(col string) error {
 	return fmt.Errorf("orm: unknown column: %s", col)
 }
+
+func NewErrUnsupportedSelectable(s any) error {
+	return fmt.Errorf("orm: unsupported selected column: %v", s)
+}

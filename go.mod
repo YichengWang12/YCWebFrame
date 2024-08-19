@@ -3,6 +3,7 @@ module WebFrame
 go 1.22
 
 require (
+	github.com/DATA-DOG/go-sqlmock v1.5.2
 	github.com/google/uuid v1.6.0
 	github.com/gotomicro/ekit v0.0.6
 	github.com/hashicorp/golang-lru v1.0.2

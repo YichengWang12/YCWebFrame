@@ -70,3 +70,42 @@ type sqlite3Dialect struct {
 func (m *sqlite3Dialect) quoter() byte {
 	return '`'
 }
+
+func (m *sqlite3Dialect) buildUpdate(b *builder, odk *Update) error {
+	b.sb.WriteString(" ON CONFLICT(")
+	for idx, col := range odk.conflictColumns {
+		if idx > 0 {
+			b.sb.WriteByte(',')
+		}
+		err := b.buildColumn(col)
+		if err != nil {
+			return err
+		}
+	}
+	b.sb.WriteString(") DO UPDATE SET ")
+	for idx, a := range odk.assigns {
+		if idx > 0 {
+			b.sb.WriteByte(',')
+		}
+		switch assign := a.(type) {
+		case Column:
+			fd, ok := b.model.FieldMap[assign.name]
+			if !ok {
+				return errs.NewErrUnknownField(assign.name)
+			}
+			b.quote(fd.ColName)
+			b.sb.WriteString("=excluded.")
+			b.quote(fd.ColName)
+		case Assignment:
+			err := b.buildColumn(assign.col)
+			if err != nil {
+				return err
+			}
+			b.sb.WriteString("=?")
+			b.addArgs(assign.val)
+		default:
+			return errs.NewErrUnsupportedAssignableType(a)
+		}
+	}
+	return nil
+}

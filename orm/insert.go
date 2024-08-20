@@ -5,8 +5,6 @@ import (
 	"WebFrame/orm/model"
 	"context"
 	"database/sql"
-	"fmt"
-	"reflect"
 )
 
 type UpdateBuilder[T any] struct {
@@ -106,7 +104,7 @@ func (i *Inserter[T]) Build() (*Query, error) {
 		if vIdx > 0 {
 			i.sb.WriteString(",")
 		}
-		refVal := reflect.ValueOf(val).Elem()
+		refVal := i.db.valCreator(val, i.model)
 
 		i.sb.WriteByte('(')
 		for fIdx, field := range fields {
@@ -114,9 +112,11 @@ func (i *Inserter[T]) Build() (*Query, error) {
 				i.sb.WriteByte(',')
 			}
 			i.sb.WriteByte('?')
-			fdVal := refVal.Field(field.Index)
-			fmt.Printf("Type of fdVal.Interface(): %T\n", fdVal.Interface())
-			i.addArgs(fdVal.Interface())
+			fdVal, err := refVal.Field(field.GoName)
+			if err != nil {
+				return nil, err
+			}
+			i.addArgs(fdVal)
 		}
 		i.sb.WriteByte(')')
 

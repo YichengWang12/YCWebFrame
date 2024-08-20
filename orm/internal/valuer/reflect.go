@@ -24,6 +24,15 @@ func NewReflectValue(val interface{}, meta *model.Model) Value {
 	}
 }
 
+func (r reflectValue) Field(name string) (any, error) {
+	res := r.val.FieldByName(name)
+	if res == (reflect.Value{}) {
+		return nil, errs.NewErrUnknownField(name)
+	}
+	return res.Interface(), nil
+
+}
+
 func (r reflectValue) SetColumns(rows *sql.Rows) error {
 	cs, err := rows.Columns()
 	if err != nil {

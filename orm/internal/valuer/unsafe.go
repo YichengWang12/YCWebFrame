@@ -22,6 +22,16 @@ func NewUnsafeValue(val interface{}, meta *model.Model) Value {
 	}
 }
 
+func (u unsafeValue) Field(name string) (any, error) {
+	cm, ok := u.meta.FieldMap[name]
+	if !ok {
+		return nil, errs.NewErrUnknownField(name)
+	}
+	ptr := unsafe.Pointer(uintptr(u.addr) + cm.Offset)
+	val := reflect.NewAt(cm.Type, ptr)
+	return val.Elem().Interface(), nil
+}
+
 func (u unsafeValue) SetColumns(rows *sql.Rows) error {
 	cs, err := rows.Columns()
 	if err != nil {

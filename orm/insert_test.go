@@ -114,7 +114,7 @@ func TestInserter_Build(t *testing.T) {
 				}).OnDuplicateKey().Update(Assign("FirstName", "Da")),
 			wantQuery: &Query{
 				SQL: "INSERT INTO `test_model`(`id`, `first_name`, `age`, `last_name`) VALUES(?,?,?,?) " +
-					"ON DUPLICATE KEY UPDATE `first_name`= ?;",
+					"ON DUPLICATE KEY UPDATE `first_name`=?;",
 				Args: []any{int64(1), "Deng", int8(18), &sql.NullString{String: "Ming", Valid: true}, "Da"},
 			},
 		},

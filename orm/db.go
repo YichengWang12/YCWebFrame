@@ -7,6 +7,7 @@ import (
 )
 
 type DB struct {
+	dialect    Dialect
 	r          model.Registry
 	db         *sql.DB
 	valCreator valuer.Creator
@@ -25,6 +26,7 @@ func Open(driver string, dsn string, opts ...DBOption) (*DB, error) {
 
 func OpenDB(db *sql.DB, opts ...DBOption) (*DB, error) {
 	res := &DB{
+		dialect:    MySQL,
 		r:          model.NewRegistry(),
 		db:         db,
 		valCreator: valuer.NewUnsafeValue,
@@ -34,6 +36,12 @@ func OpenDB(db *sql.DB, opts ...DBOption) (*DB, error) {
 	}
 	return res, nil
 
+}
+
+func DBWithDialect(d Dialect) DBOption {
+	return func(db *DB) {
+		db.dialect = d
+	}
 }
 
 func DBWithRegistry(r model.Registry) DBOption {

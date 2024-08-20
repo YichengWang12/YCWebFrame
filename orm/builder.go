@@ -2,14 +2,13 @@ package orm
 
 import (
 	"WebFrame/orm/internal/errs"
-	"WebFrame/orm/model"
 	"strings"
 )
 
 type builder struct {
+	core
 	sb      strings.Builder
 	args    []any
-	model   *model.Model
 	dialect Dialect
 	quoter  byte
 }

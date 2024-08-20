@@ -2,19 +2,15 @@ package orm
 
 import (
 	"WebFrame/orm/internal/errs"
-	model2 "WebFrame/orm/model"
 	"reflect"
-	"strings"
 )
 
 type Deleter[T any] struct {
-	sb    strings.Builder
+	builder
 	table string
 	where []Predicate
-	args  []any
-	model *model2.Model
 
-	db *DB
+	sess session
 }
 
 func (d *Deleter[T]) From(tbl string) *Deleter[T] {
@@ -27,16 +23,15 @@ func (d *Deleter[T]) Build() (*Query, error) {
 		t   T
 		err error
 	)
-	d.model, err = d.db.r.Get(&t)
+	d.model, err = d.r.Get(&t)
 	if err != nil {
 		return nil, err
 	}
 	d.sb.WriteString("DELETE FROM ")
 	if d.table == "" {
 		var t T
-		d.sb.WriteByte('`')
-		d.sb.WriteString(reflect.TypeOf(t).Name())
-		d.sb.WriteByte('`')
+
+		d.quote(reflect.TypeOf(t).Name())
 	} else {
 		d.sb.WriteString(d.table)
 	}
@@ -68,9 +63,7 @@ func (d *Deleter[T]) buildExpression(e Expression) error {
 		if !ok {
 			return errs.NewErrUnknownField(exp.name)
 		}
-		d.sb.WriteByte('`')
-		d.sb.WriteString(fd.ColName)
-		d.sb.WriteByte('`')
+		d.quote(fd.ColName)
 	case value:
 		d.sb.WriteByte('?')
 		d.args = append(d.args, exp.val)
@@ -110,8 +103,15 @@ func (d *Deleter[T]) Where(preds ...Predicate) *Deleter[T] {
 	return d
 }
 
-func NewDeleter[T any](db *DB) *Deleter[T] {
+func NewDeleter[T any](sess session) *Deleter[T] {
+	c := sess.getCore()
 	return &Deleter[T]{
-		db: db,
+		sess: sess,
+		builder: builder{
+			core: c,
+
+			dialect: c.dialect,
+			quoter:  c.dialect.quoter(),
+		},
 	}
 }

@@ -33,10 +33,10 @@ func (u *UpdateBuilder[T]) Update(assigns ...Assignable) *Inserter[T] {
 type Inserter[T any] struct {
 	builder
 	values  []*T
-	db      *DB
 	columns []string
 
 	onDuplicate *Update
+	sess        session
 }
 
 func (i *Inserter[T]) OnDuplicateKey() *UpdateBuilder[T] {
@@ -46,12 +46,14 @@ func (i *Inserter[T]) OnDuplicateKey() *UpdateBuilder[T] {
 
 }
 
-func NewInserter[T any](db *DB) *Inserter[T] {
+func NewInserter[T any](sess session) *Inserter[T] {
+	c := sess.getCore()
 	return &Inserter[T]{
-		db: db,
+		sess: sess,
 		builder: builder{
-			dialect: db.dialect,
-			quoter:  db.dialect.quoter(),
+			core:    c,
+			dialect: c.dialect,
+			quoter:  c.dialect.quoter(),
 		},
 	}
 }
@@ -72,7 +74,7 @@ func (i *Inserter[T]) Build() (*Query, error) {
 	if len(i.values) == 0 {
 		return nil, errs.ErrInsertZeroRow
 	}
-	m, err := i.db.r.Get(i.values[0])
+	m, err := i.r.Get(i.values[0])
 	if err != nil {
 		return nil, err
 	}
@@ -104,7 +106,7 @@ func (i *Inserter[T]) Build() (*Query, error) {
 		if vIdx > 0 {
 			i.sb.WriteString(",")
 		}
-		refVal := i.db.valCreator(val, i.model)
+		refVal := i.valCreator(val, i.model)
 
 		i.sb.WriteByte('(')
 		for fIdx, field := range fields {
@@ -145,6 +147,6 @@ func (i *Inserter[T]) Exec(ctx context.Context) sql.Result {
 	if err != nil {
 		return Result{err: err}
 	}
-	res, err := i.db.db.ExecContext(ctx, q.SQL, q.Args)
+	res, err := i.sess.execContext(ctx, q.SQL, q.Args)
 	return Result{err: err, res: res}
 }

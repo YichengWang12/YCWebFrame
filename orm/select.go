@@ -2,24 +2,20 @@ package orm
 
 import (
 	"WebFrame/orm/internal/errs"
-	model2 "WebFrame/orm/model"
 	"context"
-	"strings"
 )
 
 type Selector[T any] struct {
-	sb     strings.Builder
-	args   []any
-	where  []Predicate
-	having []Predicate
-	table  string
-	model  *model2.Model
+	builder
 
-	db      *DB
+	where   []Predicate
+	having  []Predicate
+	table   string
 	columns []Selectable
 	groupBy []Column
 	offset  int
 	limit   int
+	sess    session
 }
 
 func (s *Selector[T]) Select(cols ...Selectable) *Selector[T] {
@@ -37,7 +33,7 @@ func (s *Selector[T]) Build() (*Query, error) {
 		t   T
 		err error
 	)
-	s.model, err = s.db.r.Get(&t)
+	s.model, err = s.r.Get(&t)
 	if err != nil {
 		return nil, err
 	}
@@ -47,10 +43,7 @@ func (s *Selector[T]) Build() (*Query, error) {
 	}
 	s.sb.WriteString(" FROM ")
 	if s.table == "" {
-
-		s.sb.WriteByte('`')
-		s.sb.WriteString(s.model.TableName)
-		s.sb.WriteByte('`')
+		s.quote(s.model.TableName)
 	} else {
 		s.sb.WriteString(s.table)
 	}
@@ -227,7 +220,7 @@ func (s *Selector[T]) Get(ctx context.Context) (*T, error) {
 	}
 	//s.db is our defined DB
 	//s.db.db is the *sql.DB
-	rows, err := s.db.db.QueryContext(ctx, q.SQL, q.Args...)
+	rows, err := s.sess.queryContext(ctx, q.SQL, q.Args...)
 	if err != nil {
 		return nil, err
 	}
@@ -236,11 +229,11 @@ func (s *Selector[T]) Get(ctx context.Context) (*T, error) {
 	}
 	// construct
 	tp := new(T)
-	meta, err := s.db.r.Get(tp)
+	meta, err := s.r.Get(tp)
 	if err != nil {
 		return nil, err
 	}
-	val := s.db.valCreator(tp, meta)
+	val := s.valCreator(tp, meta)
 	err = val.SetColumns(rows)
 	return tp, err
 }
@@ -250,7 +243,7 @@ func (s *Selector[T]) GetMulti(ctx context.Context) ([]*T, error) {
 	if err != nil {
 		return nil, err
 	}
-	rows, err := s.db.db.QueryContext(ctx, q.SQL, q.Args...)
+	rows, err := s.sess.queryContext(ctx, q.SQL, q.Args...)
 	if err != nil {
 		return nil, err
 	}
@@ -259,11 +252,11 @@ func (s *Selector[T]) GetMulti(ctx context.Context) ([]*T, error) {
 	for rows.Next() {
 		// construct
 		tp := new(T)
-		meta, er := s.db.r.Get(tp)
+		meta, er := s.r.Get(tp)
 		if er != nil {
 			return nil, er
 		}
-		val := s.db.valCreator(tp, meta)
+		val := s.valCreator(tp, meta)
 		er = val.SetColumns(rows)
 		if er != nil && count <= cap(tps) {
 			tps[count] = tp
@@ -310,9 +303,15 @@ func (s *Selector[T]) Limit(limit int) *Selector[T] {
 	return s
 }
 
-func NewSelector[T any](db *DB) *Selector[T] {
+func NewSelector[T any](sess session) *Selector[T] {
+	c := sess.getCore()
 	return &Selector[T]{
-		db: db,
+		sess: sess,
+		builder: builder{
+			core:    c,
+			dialect: c.dialect,
+			quoter:  c.dialect.quoter(),
+		},
 	}
 }
 

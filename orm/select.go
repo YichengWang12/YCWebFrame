@@ -214,30 +214,17 @@ func (s *Selector[T]) Where(ps ...Predicate) *Selector[T] {
 }
 
 func (s *Selector[T]) Get(ctx context.Context) (*T, error) {
-	q, err := s.Build()
-	if err != nil {
-		return nil, err
+	res := get[T](ctx, s.core, s.sess, &QueryContext{
+		Builder: s,
+		Type:    "SELECT",
+	})
+	if res.Res != nil {
+		return res.Res.(*T), res.Err
 	}
-	//s.db is our defined DB
-	//s.db.db is the *sql.DB
-	rows, err := s.sess.queryContext(ctx, q.SQL, q.Args...)
-	if err != nil {
-		return nil, err
-	}
-	if !rows.Next() {
-		return nil, errs.ErrNoRows
-	}
-	// construct
-	tp := new(T)
-	meta, err := s.r.Get(tp)
-	if err != nil {
-		return nil, err
-	}
-	val := s.valCreator(tp, meta)
-	err = val.SetColumns(rows)
-	return tp, err
+	return nil, res.Err
 }
 
+// todo wait for refactor
 func (s *Selector[T]) GetMulti(ctx context.Context) ([]*T, error) {
 	q, err := s.Build()
 	if err != nil {

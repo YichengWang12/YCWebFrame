@@ -20,3 +20,7 @@ func (r Result) RowsAffected() (int64, error) {
 	}
 	return r.res.RowsAffected()
 }
+
+func (r Result) Err() error {
+	return r.err
+}

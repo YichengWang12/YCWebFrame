@@ -4,26 +4,26 @@ import (
 	"WebFrame/orm/internal/errs"
 	"WebFrame/orm/model"
 	"context"
-	"database/sql"
+	"fmt"
 )
 
-type UpdateBuilder[T any] struct {
+type UpsertBuilder[T any] struct {
 	i               *Inserter[T]
 	conflictColumns []string
 }
 
-type Update struct {
+type Upsert struct {
 	conflictColumns []string
 	assigns         []Assignable
 }
 
-func (u *UpdateBuilder[T]) ConflictColumns(cols ...string) *UpdateBuilder[T] {
+func (u *UpsertBuilder[T]) ConflictColumns(cols ...string) *UpsertBuilder[T] {
 	u.conflictColumns = cols
 	return u
 }
 
-func (u *UpdateBuilder[T]) Update(assigns ...Assignable) *Inserter[T] {
-	u.i.onDuplicate = &Update{
+func (u *UpsertBuilder[T]) Update(assigns ...Assignable) *Inserter[T] {
+	u.i.upsert = &Upsert{
 		conflictColumns: u.conflictColumns,
 		assigns:         assigns,
 	}
@@ -35,27 +35,28 @@ type Inserter[T any] struct {
 	values  []*T
 	columns []string
 
-	onDuplicate *Update
-	sess        session
-}
-
-func (i *Inserter[T]) OnDuplicateKey() *UpdateBuilder[T] {
-	return &UpdateBuilder[T]{
-		i: i,
-	}
-
+	upsert *Upsert
+	sess   session
+	core
 }
 
 func NewInserter[T any](sess session) *Inserter[T] {
 	c := sess.getCore()
 	return &Inserter[T]{
+		core: c,
 		sess: sess,
 		builder: builder{
-			core:    c,
 			dialect: c.dialect,
 			quoter:  c.dialect.quoter(),
 		},
 	}
+}
+
+func (i *Inserter[T]) OnDuplicateKey() *UpsertBuilder[T] {
+	return &UpsertBuilder[T]{
+		i: i,
+	}
+
 }
 
 // Values select the values to be inserted
@@ -74,6 +75,7 @@ func (i *Inserter[T]) Build() (*Query, error) {
 	if len(i.values) == 0 {
 		return nil, errs.ErrInsertZeroRow
 	}
+	fmt.Println("i.values", i.values)
 	m, err := i.r.Get(i.values[0])
 	if err != nil {
 		return nil, err
@@ -124,8 +126,8 @@ func (i *Inserter[T]) Build() (*Query, error) {
 
 	}
 
-	if i.onDuplicate != nil {
-		err = i.dialect.buildUpdate(&i.builder, i.onDuplicate)
+	if i.upsert != nil {
+		err = i.core.dialect.buildUpsert(&i.builder, i.upsert)
 		if err != nil {
 			return nil, err
 		}
@@ -142,11 +144,9 @@ func (i *Inserter[T]) Build() (*Query, error) {
 //	i.args = append(i.args, args...)
 //}
 
-func (i *Inserter[T]) Exec(ctx context.Context) sql.Result {
-	q, err := i.Build()
-	if err != nil {
-		return Result{err: err}
-	}
-	res, err := i.sess.execContext(ctx, q.SQL, q.Args)
-	return Result{err: err, res: res}
+func (i *Inserter[T]) Exec(ctx context.Context) Result {
+	return exec(ctx, i.sess, i.core, &QueryContext{
+		Builder: i,
+		Type:    "INSERT",
+	})
 }

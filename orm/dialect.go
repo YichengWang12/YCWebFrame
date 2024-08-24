@@ -9,7 +9,7 @@ var (
 
 type Dialect interface {
 	quoter() byte
-	buildUpdate(b *builder, odk *Update) error
+	buildUpsert(b *builder, odk *Upsert) error
 }
 
 type standardSQL struct {
@@ -20,7 +20,7 @@ func (s standardSQL) quoter() byte {
 	panic("implement me")
 }
 
-func (s standardSQL) buildUpdate(b *builder, odk *Update) error {
+func (s standardSQL) buildUpsert(b *builder, odk *Upsert) error {
 	//TODO implement me
 	panic("implement me")
 }
@@ -33,7 +33,7 @@ func (m *mysqlDialect) quoter() byte {
 	return '`'
 }
 
-func (m *mysqlDialect) buildUpdate(b *builder, odk *Update) error {
+func (m *mysqlDialect) buildUpsert(b *builder, odk *Upsert) error {
 	b.sb.WriteString(" ON DUPLICATE KEY UPDATE ")
 	for idx, a := range odk.assigns {
 		if idx > 0 {
@@ -54,8 +54,8 @@ func (m *mysqlDialect) buildUpdate(b *builder, odk *Update) error {
 			if err != nil {
 				return err
 			}
-			b.sb.WriteString("=?")
-			b.addArgs(assign.val)
+			b.sb.WriteString("=")
+			return b.buildExpression(assign.val)
 		default:
 			return errs.NewErrUnsupportedAssignableType(a)
 		}
@@ -71,7 +71,7 @@ func (m *sqlite3Dialect) quoter() byte {
 	return '`'
 }
 
-func (m *sqlite3Dialect) buildUpdate(b *builder, odk *Update) error {
+func (m *sqlite3Dialect) buildUpsert(b *builder, odk *Upsert) error {
 	b.sb.WriteString(" ON CONFLICT(")
 	for idx, col := range odk.conflictColumns {
 		if idx > 0 {
@@ -101,8 +101,8 @@ func (m *sqlite3Dialect) buildUpdate(b *builder, odk *Update) error {
 			if err != nil {
 				return err
 			}
-			b.sb.WriteString("=?")
-			b.addArgs(assign.val)
+			b.sb.WriteString("=")
+			return b.buildExpression(assign.val)
 		default:
 			return errs.NewErrUnsupportedAssignableType(a)
 		}

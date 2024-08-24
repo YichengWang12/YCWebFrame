@@ -3,6 +3,7 @@ package model
 import (
 	"WebFrame/orm/internal/errs"
 	"database/sql"
+	"errors"
 	"github.com/stretchr/testify/assert"
 	"reflect"
 	"testing"
@@ -17,7 +18,7 @@ func TestModelWithTableName(t *testing.T) {
 		wantErr       error
 	}{
 		{
-			// we don't validate empty string
+			// 我们没有对空字符串进行校验
 			name:          "empty string",
 			val:           &TestModel{},
 			opt:           WithTableName(""),
@@ -68,7 +69,7 @@ func TestWithColumnName(t *testing.T) {
 			wantColName: "",
 		},
 		{
-			// non-existent field
+			// 不存在的字段
 			name:    "invalid Field name",
 			val:     &TestModel{},
 			opt:     WithColumnName("FirstNameXXX", "first_name"),
@@ -92,6 +93,7 @@ func TestWithColumnName(t *testing.T) {
 }
 
 func TestRegistry_get(t *testing.T) {
+	var tm TestModel
 	testCases := []struct {
 		name      string
 		val       any
@@ -101,7 +103,7 @@ func TestRegistry_get(t *testing.T) {
 		{
 			name:    "test Model",
 			val:     TestModel{},
-			wantErr: errs.ErrPointerOnly,
+			wantErr: errors.New("orm: Only supports one-level pointer as input, such as *User"),
 		},
 		{
 			// 指针
@@ -109,84 +111,45 @@ func TestRegistry_get(t *testing.T) {
 			val:  &TestModel{},
 			wantModel: &Model{
 				TableName: "test_model",
+				Fields:    []*Field{tm.IdField(), tm.FirstNameField(), tm.AgeField(), tm.LastNameField()},
 				FieldMap: map[string]*Field{
-					"Id": {
-						ColName: "id",
-						Type:    reflect.TypeOf(int64(0)),
-						GoName:  "Id",
-						Offset:  0,
-					},
-					"FirstName": {
-						ColName: "first_name",
-						Type:    reflect.TypeOf(""),
-						GoName:  "FirstName",
-						Offset:  8,
-					},
-					"Age": {
-						ColName: "age",
-						Type:    reflect.TypeOf(int8(0)),
-						GoName:  "Age",
-						Offset:  24,
-					},
-					"LastName": {
-						ColName: "last_name",
-						Type:    reflect.TypeOf(&sql.NullString{}),
-						GoName:  "LastName",
-						Offset:  32,
-					},
+					"Id":        tm.IdField(),
+					"FirstName": tm.FirstNameField(),
+					"Age":       tm.AgeField(),
+					"LastName":  tm.LastNameField(),
 				},
 				ColumnMap: map[string]*Field{
-					"id": {
-						ColName: "id",
-						Type:    reflect.TypeOf(int64(0)),
-						GoName:  "Id",
-						Offset:  0,
-					},
-					"first_name": {
-						ColName: "first_name",
-						Type:    reflect.TypeOf(""),
-						GoName:  "FirstName",
-						Offset:  8,
-					},
-					"age": {
-						ColName: "age",
-						Type:    reflect.TypeOf(int8(0)),
-						GoName:  "Age",
-						Offset:  24,
-					},
-					"last_name": {
-						ColName: "last_name",
-						Type:    reflect.TypeOf(&sql.NullString{}),
-						GoName:  "LastName",
-						Offset:  32,
-					},
+					"id":         tm.IdField(),
+					"first_name": tm.FirstNameField(),
+					"age":        tm.AgeField(),
+					"last_name":  tm.LastNameField(),
 				},
 			},
 		},
 		{
-
+			// 多级指针
 			name: "multiple pointer",
-			// Because of the Go compiler, we write it like this
+			// 因为 Go 编译器的原因，所以我们写成这样
 			val: func() any {
 				val := &TestModel{}
 				return &val
 			}(),
-			wantErr: errs.ErrPointerOnly,
+			wantErr: errors.New("orm: Only supports one-level pointer as input, such as *User"),
 		},
 		{
 			name:    "map",
 			val:     map[string]string{},
-			wantErr: errs.ErrPointerOnly,
+			wantErr: errors.New("orm: Only supports one-level pointer as input, such as *User"),
 		},
 		{
 			name:    "slice",
 			val:     []int{},
-			wantErr: errs.ErrPointerOnly,
+			wantErr: errors.New("orm: Only supports one-level pointer as input, such as *User"),
 		},
 		{
 			name:    "basic type",
 			val:     0,
-			wantErr: errs.ErrPointerOnly,
+			wantErr: errors.New("orm: Only supports one-level pointer as input, such as *User"),
 		},
 
 		// 标签相关测试用例
@@ -201,6 +164,11 @@ func TestRegistry_get(t *testing.T) {
 			}(),
 			wantModel: &Model{
 				TableName: "column_tag",
+				Fields: []*Field{{
+					ColName: "id",
+					Type:    reflect.TypeOf(uint64(0)),
+					GoName:  "ID",
+				}},
 				FieldMap: map[string]*Field{
 					"ID": {
 						ColName: "id",
@@ -229,6 +197,11 @@ func TestRegistry_get(t *testing.T) {
 			}(),
 			wantModel: &Model{
 				TableName: "empty_column",
+				Fields: []*Field{{
+					ColName: "first_name",
+					Type:    reflect.TypeOf(""),
+					GoName:  "FirstName",
+				}},
 				FieldMap: map[string]*Field{
 					"FirstName": {
 						ColName: "first_name",
@@ -269,6 +242,11 @@ func TestRegistry_get(t *testing.T) {
 			}(),
 			wantModel: &Model{
 				TableName: "ignore_tag",
+				Fields: []*Field{{
+					ColName: "first_name",
+					Type:    reflect.TypeOf(""),
+					GoName:  "FirstName",
+				}},
 				FieldMap: map[string]*Field{
 					"FirstName": {
 						ColName: "first_name",
@@ -291,7 +269,12 @@ func TestRegistry_get(t *testing.T) {
 			name: "table name",
 			val:  &CustomTableName{},
 			wantModel: &Model{
-				TableName: "custom_table_name_t",
+				TableName: "custom_table_name",
+				Fields: []*Field{{
+					ColName: "name",
+					GoName:  "Name",
+					Type:    reflect.TypeOf(""),
+				}},
 				FieldMap: map[string]*Field{
 					"Name": {
 						ColName: "name",
@@ -312,7 +295,12 @@ func TestRegistry_get(t *testing.T) {
 			name: "table name ptr",
 			val:  &CustomTableNamePtr{},
 			wantModel: &Model{
-				TableName: "custom_table_name_ptr_t",
+				TableName: "custom_table_name_ptr",
+				Fields: []*Field{{
+					ColName: "name",
+					GoName:  "Name",
+					Type:    reflect.TypeOf(""),
+				}},
 				FieldMap: map[string]*Field{
 					"Name": {
 						ColName: "name",
@@ -334,6 +322,11 @@ func TestRegistry_get(t *testing.T) {
 			val:  &EmptyTableName{},
 			wantModel: &Model{
 				TableName: "empty_table_name",
+				Fields: []*Field{{
+					ColName: "name",
+					GoName:  "Name",
+					Type:    reflect.TypeOf(""),
+				}},
 				FieldMap: map[string]*Field{
 					"Name": {
 						ColName: "name",
@@ -371,7 +364,12 @@ func Test_underscoreName(t *testing.T) {
 		srcStr  string
 		wantStr string
 	}{
-		// ID will be converted to id, It is acceptable
+		// 我们这些用例就是为了确保
+		// 在忘记 underscoreName 的行为特性之后
+		// 可以从这里找回来
+		// 比如说过了一段时间之后
+		// 忘记了 ID 不能转化为 id
+		// 那么这个测试能帮我们确定 ID 只能转化为 i_d
 		{
 			name:    "upper cases",
 			srcStr:  "ID",
@@ -421,4 +419,44 @@ type TestModel struct {
 	FirstName string
 	Age       int8
 	LastName  *sql.NullString
+}
+
+func (TestModel) IdField() *Field {
+	return &Field{
+		ColName: "id",
+		Type:    reflect.TypeOf(int64(0)),
+		GoName:  "Id",
+		Offset:  0,
+		Index:   0,
+	}
+}
+
+func (TestModel) FirstNameField() *Field {
+	return &Field{
+		ColName: "first_name",
+		Type:    reflect.TypeOf(""),
+		GoName:  "FirstName",
+		Offset:  8,
+		Index:   1,
+	}
+}
+
+func (TestModel) AgeField() *Field {
+	return &Field{
+		ColName: "age",
+		Type:    reflect.TypeOf(int8(0)),
+		GoName:  "Age",
+		Offset:  24,
+		Index:   2,
+	}
+}
+
+func (TestModel) LastNameField() *Field {
+	return &Field{
+		ColName: "last_name",
+		Type:    reflect.TypeOf(&sql.NullString{}),
+		GoName:  "LastName",
+		Offset:  32,
+		Index:   3,
+	}
 }

@@ -6,13 +6,17 @@ type Assignable interface {
 
 type Assignment struct {
 	col string
-	val any
+	val Expression
 }
 
 func Assign(col string, val any) Assignment {
+	v, ok := val.(Expression)
+	if !ok {
+		v = value{val: val}
+	}
 	return Assignment{
 		col: col,
-		val: val,
+		val: v,
 	}
 }
 

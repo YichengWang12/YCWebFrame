@@ -23,6 +23,10 @@ func NewErrUnknownField(fd string) error {
 	return fmt.Errorf("orm: unknown field %s", fd)
 }
 
+func NewErrFailedToRollbackTx(bizErr error, rollbackErr error, panicked bool) error {
+	return fmt.Errorf("orm: failed to rollback transaction, biz error: %v, rollback error: %v, panicked: %v", bizErr, rollbackErr, panicked)
+}
+
 // NewErrUnsupportedExpressionType returns an error message that does not support the expression
 func NewErrUnsupportedExpressionType(exp any) error {
 	return fmt.Errorf("orm: unsupported expression: %v ", exp)

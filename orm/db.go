@@ -1,19 +1,34 @@
 package orm
 
 import (
+	"WebFrame/orm/internal/errs"
 	"WebFrame/orm/internal/valuer"
 	"WebFrame/orm/model"
 	"context"
 	"database/sql"
+	"database/sql/driver"
+	"log"
+	"time"
 )
 
 type DB struct {
 	db *sql.DB
-
 	core
 }
 
 type DBOption func(*DB)
+
+// Wait db connection
+// Only for testing
+func (db *DB) Wait() error {
+	err := db.db.Ping()
+	for err == driver.ErrBadConn {
+		log.Printf("等待数据库启动...")
+		err = db.db.Ping()
+		time.Sleep(time.Second)
+	}
+	return err
+}
 
 func Open(driver string, dsn string, opts ...DBOption) (*DB, error) {
 	db, err := sql.Open(driver, dsn)
@@ -66,6 +81,47 @@ func (db *DB) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) {
 	return &Tx{tx: tx}, nil
 }
 
+type txKey struct {
+}
+
+// BeginTxV2 support transaction propagation, if there is already a transaction in the context, return it directly
+func (db *DB) BeginTxV2(ctx context.Context, opts *sql.TxOptions) (context.Context, *Tx, error) {
+	val := ctx.Value(txKey{})
+	tx, ok := val.(*Tx)
+	if ok && !tx.done {
+		return ctx, tx, nil
+	}
+
+	tx, err := db.BeginTx(ctx, opts)
+	if err != nil {
+		return nil, nil, err
+	}
+	ctx = context.WithValue(ctx, txKey{}, tx)
+	return ctx, tx, nil
+}
+
+func (db *DB) DoTx(ctx context.Context, fn func(ctx context.Context, tx *Tx) error, opts *sql.TxOptions) (err error) {
+	var tx *Tx
+	tx, err = db.BeginTx(ctx, opts)
+	if err != nil {
+		return err
+	}
+	panicked := true
+	defer func() {
+		if panicked || err != nil {
+			e := tx.Rollback()
+			if e != nil {
+				err = errs.NewErrFailedToRollbackTx(err, e, panicked)
+			}
+		} else {
+			err = tx.Commit()
+		}
+	}()
+	err = fn(ctx, tx)
+	panicked = false
+	return err
+}
+
 func (db *DB) queryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error) {
 	return db.db.QueryContext(ctx, query, args...)
 }
@@ -75,6 +131,10 @@ func (db *DB) execContext(ctx context.Context, query string, args ...any) (sql.R
 }
 func (db *DB) getCore() core {
 	return db.core
+}
+
+func (db *DB) Close() error {
+	return db.db.Close()
 }
 
 // MustNewDB provides a way to create a DB and panic if it fails.
